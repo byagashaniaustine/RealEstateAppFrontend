@@ -124,12 +124,6 @@ You can test APIs using:
 
 ---
 
-## 📸 Screenshots
-
-*Add your app screenshots here*
-
----
-
 ## 🚧 Future Improvements
 
 * 🔎 Property search & filters
