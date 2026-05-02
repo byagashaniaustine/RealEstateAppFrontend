@@ -7,6 +7,7 @@ import {
   Alert,
   StyleSheet,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import axios from 'axios';
 
@@ -17,6 +18,9 @@ export default function AgentLogin({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotModal, setForgotModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleLogin = async () => {
     // Basic Validation
@@ -52,7 +56,6 @@ export default function AgentLogin({ navigation }: any) {
         Alert.alert('Login failed', res.data.message || 'Invalid credentials');
       }
     } catch (error: any) {
-      console.error('Login error:', error);
       
       // Better error messaging for connection issues
       const errorMsg = error.response?.data?.detail || 
@@ -60,15 +63,64 @@ export default function AgentLogin({ navigation }: any) {
                         ? 'Cannot reach server. Check if backend is running.' 
                         : 'Invalid credentials');
       
-      Alert.alert('Error', errorMsg);
+      Alert.alert( errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!resetEmail.trim()) {
+      Alert.alert('Enter your email address');
+      return;
+    }
+    try {
+      setResetLoading(true);
+      const res = await axios.post(`${API_URL}/forgot-password`, { email: resetEmail.trim() });
+      if (res.data.status === 'success') {
+        setForgotModal(false);
+        setResetEmail('');
+        Alert.alert('Email Sent', 'Check your inbox for a password reset link.');
+      } else {
+        Alert.alert('Error', res.data.message || 'Could not send reset email.');
+      }
+    } catch {
+      Alert.alert('Error', 'Could not reach server.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
+      {/* FORGOT PASSWORD MODAL */}
+      <Modal visible={forgotModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Reset Password</Text>
+            <Text style={styles.modalSub}>Enter your email and we will send you a reset link.</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Email Address"
+              value={resetEmail}
+              onChangeText={setResetEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TouchableOpacity style={styles.loginButton} onPress={handleForgotPassword} disabled={resetLoading}>
+              {resetLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginText}>Send Reset Link</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setForgotModal(false); setResetEmail(''); }} style={styles.registerBtn}>
+              <Text style={styles.registerText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.card}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backArrow}>←</Text>
+        </TouchableOpacity>
         <Text style={styles.title}>Agent Login</Text>
 
         <TextInput
@@ -100,13 +152,17 @@ export default function AgentLogin({ navigation }: any) {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('AgentRegister')} 
+        <TouchableOpacity onPress={() => setForgotModal(true)} style={styles.forgotBtn}>
+          <Text style={styles.forgotText}>Forgot password?</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => navigation.navigate('AgentRegister')}
           style={styles.registerBtn}
-        > 
-          <Text style={styles.registerText}> 
-            Not registered? Create an account 
-          </Text> 
+        >
+          <Text style={styles.registerText}>
+            Not registered? Create an account
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -159,13 +215,56 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
+  forgotBtn: {
+    marginTop: 14,
+    alignItems: 'center',
+  },
+  forgotText: {
+    color: '#888',
+    fontSize: 13,
+  },
   registerBtn: {
-    marginTop: 20,
+    marginTop: 16,
     alignItems: 'center',
   },
   registerText: {
     color: 'steelblue',
     fontWeight: '600',
     fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBox: {
+    width: '88%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: 'steelblue',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  backBtn: {
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+    padding: 4,
+  },
+  backArrow: {
+    fontSize: 24,
+    color: 'steelblue',
+  },
+  modalSub: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
   },
 });

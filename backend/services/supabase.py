@@ -4,6 +4,7 @@ from fastapi import UploadFile, Request
 import logging
 import os
 import uuid
+from datetime import datetime, timedelta
 
 # ===============================
 # ENV SETUP
@@ -221,7 +222,7 @@ async def get_agent_by_id(agent_id: int):
 # =====================================================
 # ---------------- PROPERTY FUNCTIONS -----------------
 # =====================================================
-
+# --- services/supabase.py ---
 async def add_property(
     name: str,
     location: str,
@@ -229,19 +230,21 @@ async def add_property(
     status: str,
     phone_number: str,
     agent_id: int,
-    image: UploadFile = None
+    images: list[UploadFile] = None
 ):
-
     try:
-        image_url = None
+        image_urls = []
+        
+        # 1. Upload multiple images to the 'Nyumba' bucket
+        if images:
+            for image in images:
+                # Store in a folder named after the agent_id for organization
+                url = await upload_image_to_bucket(image, f"properties/{agent_id}")
+                if url:
+                    image_urls.append(url)
 
-        if image:
-            image_url = await upload_image_to_bucket(
-                image,
-                f"properties/{agent_id}"
-            )
-            logger.debug(f"Image uploaded to: {image_url}")
-
+        # 2. Insert into Supabase table
+        # Ensure the 'image' column in Supabase is set to text[]
         response = supabase.table("Properties").insert({
             "name": name,
             "location": location,
@@ -249,23 +252,17 @@ async def add_property(
             "status": status,
             "phone": phone_number,
             "agent_id": agent_id,
-            "image": image_url
+            "image": image_urls if image_urls else [] 
         }).execute()
-        logger.debug(f"Supabase insert response: {response}")
+        
         return {
-            "status": "success",
-            "message": "Property added",
+            "status": "success", 
+            "message": "Property added successfully",
             "data": response.data
         }
-
     except Exception as e:
-        logger.critical(f"❌ Error adding property: {e}")
-        return {
-            "status": "failed",
-            "message": str(e)
-        }
-
-
+        logger.error(f"❌ Error in add_property service: {e}")
+        return {"status": "failed", "message": str(e)}
 # =====================================================
 # ---------------- GET ALL PROPERTIES -----------------
 # =====================================================
@@ -316,46 +313,45 @@ async def get_properties_by_agent(agent_id: int):
 # =====================================================
 # ---------------- UPDATE PROPERTY --------------------
 # =====================================================
+# Update this in services/supabase.py
 async def update_property(
     prop_id: int,
     prop_name: str,
     prop_location: str,
     prop_price: float,
     agent_id: int,
-    image: UploadFile = None
+    status: str,
+    images: list[UploadFile] = None
 ):
     try:
         update_data = {
             "name": prop_name,
             "location": prop_location,
             "price": prop_price,
-            "agent_id": agent_id
+            "agent_id": agent_id,
+            "status": status
         }
 
-        if image:
-            image_url = await upload_image_to_bucket(
-                image,
-                f"properties/{agent_id}"
-            )
-            update_data["image"] = image_url
+        # If the user selected new images in the app
+        if images:
+            image_urls = []
+            for img in images:
+                url = await upload_image_to_bucket(img, f"properties/{agent_id}")
+                if url:
+                    image_urls.append(url)
+            
+            if image_urls:
+                update_data["image"] = image_urls 
 
         response = supabase.table("Properties") \
             .update(update_data) \
             .eq("id", prop_id) \
             .eq("agent_id", agent_id).execute()
 
-        return {
-            "status": "success",
-            "message": "Property updated",
-            "data": response.data
-        }
-
+        return {"status": "success", "data": response.data}
     except Exception as e:
-        return {
-            "status": "failed",
-            "message": str(e)
-        }
-
+        logger.error(f"❌ Update failed: {e}")
+        return {"status": "failed", "message": str(e)}
 # =====================================================
 # ---------------- DELETE PROPERTY --------------------
 # =====================================================
@@ -391,3 +387,314 @@ async def delete_property(prop_id: int):
             "status": "failed",
             "message": str(e)
         }
+
+# ================= BOOK VISIT =================
+async def book_visit(property_id: int, user_name: str, user_phone: str, visit_date: str):
+    try:
+        existing = supabase_admin.table("Bookings") \
+            .select("*") \
+            .eq("property_id", property_id) \
+            .eq("visit_date", visit_date) \
+            .eq("user_phone", user_phone) \
+            .execute()
+
+        if existing.data:
+            return {"status": "failed", "message": "Date already booked"}
+
+        response = supabase_admin.table("Bookings").insert({
+            "property_id": property_id,
+            "user_name": user_name,
+            "user_phone": user_phone,
+            "visit_date": visit_date,
+            "stage": "new",
+        }).execute()
+
+        # WhatsApp notification to agent
+        try:
+            from services.whatsapp import notify_new_booking
+            prop_res = supabase.table("Properties").select("name, agent_id").eq("id", property_id).execute()
+            if prop_res.data:
+                prop = prop_res.data[0]
+                agent_res = supabase.table("agents_dalalikiganjani").select("phone").eq("id", prop["agent_id"]).execute()
+                if agent_res.data:
+                    notify_new_booking(agent_res.data[0]["phone"], user_name, prop["name"], visit_date)
+        except Exception as wa_err:
+            logger.warning(f"WhatsApp booking notify failed: {wa_err}")
+
+        return {"status": "success", "data": response.data}
+
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+# ================= GET BOOKINGS =================
+async def get_bookings(property_id: int):
+    try:
+        response = supabase_admin.table("Bookings") \
+            .select("*") \
+            .eq("property_id", property_id) \
+            .execute()
+
+        return {"status": "success", "data": response.data}
+
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+# ================= TAKE PROPERTY =================
+async def take_property(property_id: int):
+    try:
+        response = supabase.table("Properties") \
+            .update({"status": "unavailable"}) \
+            .eq("id", property_id) \
+            .execute()
+
+        return {"status": "success", "data": response.data}
+
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+# =====================================================
+# ---------------- NEGOTIATIONS -----------------------
+# =====================================================
+
+async def send_negotiation(
+    property_id: int,
+    agent_id: int,
+    client_name: str,
+    client_phone: str,
+    offer_price: float,
+    client_message: str,
+) -> dict:
+    try:
+        existing = supabase_admin.table("negotiations") \
+            .select("id") \
+            .eq("property_id", property_id) \
+            .eq("client_phone", client_phone) \
+            .execute()
+
+        if existing.data:
+            response = supabase_admin.table("negotiations") \
+                .update({
+                    "offer_price": offer_price,
+                    "client_message": client_message,
+                    "status": "pending",
+                    "agent_response": None,
+                }) \
+                .eq("id", existing.data[0]["id"]) \
+                .execute()
+        else:
+            response = supabase_admin.table("negotiations").insert({
+                "property_id": property_id,
+                "agent_id": agent_id,
+                "client_name": client_name,
+                "client_phone": client_phone,
+                "offer_price": offer_price,
+                "client_message": client_message,
+                "status": "pending",
+            }).execute()
+
+        # WhatsApp notification to agent
+        try:
+            from services.whatsapp import notify_new_offer
+            agent_res = supabase.table("agents_dalalikiganjani").select("phone").eq("id", agent_id).execute()
+            prop_res = supabase.table("Properties").select("name").eq("id", property_id).execute()
+            if agent_res.data and prop_res.data:
+                notify_new_offer(agent_res.data[0]["phone"], client_name, prop_res.data[0]["name"], offer_price)
+        except Exception as wa_err:
+            logger.warning(f"WhatsApp offer notify failed: {wa_err}")
+
+        return {"status": "success", "data": response.data}
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+async def get_negotiations_for_client(client_phone: str) -> dict:
+    try:
+        response = supabase_admin.table("negotiations") \
+            .select("*") \
+            .eq("client_phone", client_phone) \
+            .execute()
+        return {"status": "success", "data": response.data}
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+async def get_negotiations_for_agent(agent_id: int) -> dict:
+    try:
+        response = supabase_admin.table("negotiations") \
+            .select("*") \
+            .eq("agent_id", agent_id) \
+            .execute()
+        return {"status": "success", "data": response.data}
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+async def respond_to_negotiation(negotiation_id: int, agent_response: str, status: str) -> dict:
+    try:
+        response = supabase_admin.table("negotiations") \
+            .update({"agent_response": agent_response, "status": status}) \
+            .eq("id", negotiation_id) \
+            .execute()
+        return {"status": "success", "data": response.data}
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+async def reset_agent_password(email: str) -> dict:
+    try:
+        supabase.auth.reset_password_for_email(email)
+        return {"status": "success", "message": "Password reset email sent"}
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+# =====================================================
+# ---------------- ANALYTICS --------------------------
+# =====================================================
+async def get_agent_analytics(agent_id: int) -> dict:
+    try:
+        props_res = supabase.table("Properties").select("id, status").eq("agent_id", agent_id).execute()
+        props = props_res.data or []
+        prop_ids = [p["id"] for p in props]
+
+        bookings = []
+        if prop_ids:
+            b_res = supabase_admin.table("Bookings").select("*").in_("property_id", prop_ids).execute()
+            bookings = b_res.data or []
+
+        negs_res = supabase_admin.table("negotiations").select("status").eq("agent_id", agent_id).execute()
+        negs = negs_res.data or []
+
+        # Last 6 months booking count
+        monthly = {}
+        for i in range(5, -1, -1):
+            d = datetime.now() - timedelta(days=30 * i)
+            monthly[d.strftime("%b")] = 0
+        for b in bookings:
+            try:
+                d = datetime.fromisoformat((b.get("created_at") or "")[:10])
+                key = d.strftime("%b")
+                if key in monthly:
+                    monthly[key] += 1
+            except Exception:
+                pass
+
+        return {
+            "status": "success",
+            "data": {
+                "properties": {
+                    "total": len(props),
+                    "available": sum(1 for p in props if p["status"] == "available"),
+                    "booked": sum(1 for p in props if p["status"] == "booked"),
+                    "unavailable": sum(1 for p in props if p["status"] == "unavailable"),
+                },
+                "bookings": {
+                    "total": len(bookings),
+                    "stages": {
+                        "new": sum(1 for b in bookings if (b.get("stage") or "new") == "new"),
+                        "contacted": sum(1 for b in bookings if b.get("stage") == "contacted"),
+                        "viewing_scheduled": sum(1 for b in bookings if b.get("stage") == "viewing_scheduled"),
+                        "closed": sum(1 for b in bookings if b.get("stage") == "closed"),
+                        "lost": sum(1 for b in bookings if b.get("stage") == "lost"),
+                    },
+                    "monthly": monthly,
+                },
+                "negotiations": {
+                    "total": len(negs),
+                    "pending": sum(1 for n in negs if n.get("status") == "pending"),
+                    "accepted": sum(1 for n in negs if n.get("status") == "accepted"),
+                    "rejected": sum(1 for n in negs if n.get("status") == "rejected"),
+                },
+            },
+        }
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+# =====================================================
+# ---------------- LEAD PIPELINE ----------------------
+# =====================================================
+async def get_agent_leads(agent_id: int) -> dict:
+    try:
+        props_res = supabase.table("Properties").select("id, name").eq("agent_id", agent_id).execute()
+        prop_map = {p["id"]: p["name"] for p in (props_res.data or [])}
+        prop_ids = list(prop_map.keys())
+
+        if not prop_ids:
+            return {"status": "success", "data": []}
+
+        b_res = supabase_admin.table("Bookings").select("*").in_("property_id", prop_ids).execute()
+        bookings = b_res.data or []
+        for b in bookings:
+            b["property_name"] = prop_map.get(b.get("property_id"), "Unknown")
+            if not b.get("stage"):
+                b["stage"] = "new"
+
+        return {"status": "success", "data": bookings}
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+async def update_lead_stage(booking_id: int, stage: str) -> dict:
+    try:
+        res = supabase_admin.table("Bookings").update({"stage": stage}).eq("id", booking_id).execute()
+        return {"status": "success", "data": res.data}
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+# =====================================================
+# ---------------- SUBSCRIPTIONS ----------------------
+# =====================================================
+async def get_agent_subscription(agent_id: int) -> dict:
+    try:
+        res = supabase_admin.table("subscriptions") \
+            .select("*") \
+            .eq("agent_id", agent_id) \
+            .order("created_at", desc=True) \
+            .limit(1) \
+            .execute()
+        return {"status": "success", "data": res.data[0] if res.data else None}
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+async def create_subscription(agent_id: int, plan: str, tx_ref: str, amount: float) -> dict:
+    try:
+        days = 365 if plan == "annual" else 30
+        start = datetime.now()
+        end = start + timedelta(days=days)
+
+        supabase_admin.table("subscriptions") \
+            .update({"status": "expired"}) \
+            .eq("agent_id", agent_id) \
+            .eq("status", "active") \
+            .execute()
+
+        res = supabase_admin.table("subscriptions").insert({
+            "agent_id": agent_id,
+            "plan": plan,
+            "status": "active",
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "tx_ref": tx_ref,
+            "amount": amount,
+        }).execute()
+        return {"status": "success", "data": res.data}
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}
+
+
+async def update_property_status(property_id: int, agent_id: int, new_status: str) -> dict:
+    try:
+        response = supabase.table("Properties") \
+            .update({"status": new_status}) \
+            .eq("id", property_id) \
+            .eq("agent_id", agent_id) \
+            .execute()
+        return {"status": "success", "data": response.data}
+    except Exception as e:
+        return {"status": "failed", "message": str(e)}

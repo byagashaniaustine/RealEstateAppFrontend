@@ -7,12 +7,13 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import axios from "axios";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 /* ---------------- CONFIG ---------------- */
-
+// Replace with your local IP if testing on a physical device
 const API_URL = "http://127.0.0.1:8081";
 
 /* ---------------- TYPES ---------------- */
@@ -21,7 +22,9 @@ interface Property {
   id: number;
   name: string;
   price: number;
-  image?: string;
+  // Updated: Now explicitly handles array from Supabase text[]
+  image?: string | string[]; 
+  location?: string;
 }
 
 interface Agent {
@@ -34,7 +37,6 @@ interface Agent {
 
 export default function HomeScreen({ navigation }: any) {
   const [open, setOpen] = useState(false);
-
   const [properties, setProperties] = useState<Property[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +46,6 @@ export default function HomeScreen({ navigation }: any) {
   const fetchData = async () => {
     try {
       setLoading(true);
-
       const [propRes, agentRes] = await Promise.all([
         axios.get(`${API_URL}/properties`),
         axios.get(`${API_URL}/get_agents`),
@@ -63,7 +64,18 @@ export default function HomeScreen({ navigation }: any) {
     fetchData();
   }, []);
 
-  /* ---------------- LOADING ---------------- */
+  /* ---------------- HELPERS ---------------- */
+
+  // Safely extracts a single URI string from the image data
+  const getThumbnail = (imageSource: any) => {
+    if (Array.isArray(imageSource) && imageSource.length > 0) {
+      return imageSource[0];
+    }
+    if (typeof imageSource === "string" && imageSource.length > 0) {
+      return imageSource;
+    }
+    return null; // Triggers fallback
+  };
 
   if (loading) {
     return (
@@ -75,8 +87,6 @@ export default function HomeScreen({ navigation }: any) {
     );
   }
 
-  /* ---------------- UI ---------------- */
-
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -84,7 +94,6 @@ export default function HomeScreen({ navigation }: any) {
         {/* HEADER */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>DalaliKiganjani</Text>
-
           <TouchableOpacity onPress={() => setOpen(!open)}>
             <Text style={{ color: "#fff", fontSize: 20 }}>☰</Text>
           </TouchableOpacity>
@@ -93,10 +102,9 @@ export default function HomeScreen({ navigation }: any) {
         {/* SIDEBAR */}
         {open && (
           <View style={styles.sidebar}>
-            <TouchableOpacity onPress={() => setOpen(false)}>
+            <TouchableOpacity onPress={() => setOpen(false)} style={styles.closeBtn}>
               <Text style={styles.close}>✕</Text>
             </TouchableOpacity>
-
             <Text style={styles.item}>Language</Text>
             <Text style={styles.item}>Settings</Text>
             <Text style={styles.item}>Help</Text>
@@ -109,23 +117,22 @@ export default function HomeScreen({ navigation }: any) {
           style={styles.heroImage}
         />
 
-        {/* ROLE */}
+        {/* ROLE SELECTION */}
         <View style={styles.roleContainer}>
           <Text style={styles.roleTitle}>What are you looking for?</Text>
-
           <View style={styles.roleButtons}>
             <TouchableOpacity
               style={styles.primaryButton}
               onPress={() => navigation.navigate("Properties")}
             >
-              <Text style={styles.buttonText}>I'm a Client</Text>
+              <Text style={styles.buttonText}>I&apos;m a Client</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.primaryButton}
               onPress={() => navigation.navigate("AgentLogin")}
             >
-              <Text style={styles.buttonText}>I'm an Agent</Text>
+              <Text style={styles.buttonText}>I&apos;m an Agent</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -133,39 +140,47 @@ export default function HomeScreen({ navigation }: any) {
         {/* ================= PROPERTIES ================= */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Available Properties</Text>
-
           <TouchableOpacity onPress={() => navigation.navigate("Properties")}>
             <Text style={styles.viewAll}>View All</Text>
           </TouchableOpacity>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {properties.slice(0, 5).map((item) => (
-            <TouchableOpacity key={item.id} style={styles.card}>
-              <Image
-                source={{ uri: item.image }}
-                style={styles.cardImage}
-              />
-              <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardSub}>TZS {item.price}</Text>
-            </TouchableOpacity>
-          ))}
+          {properties.slice(0, 5).map((item) => {
+            const uri = getThumbnail(item.image);
+            return (
+              <TouchableOpacity key={item.id} style={styles.card}>
+                {uri ? (
+                  <Image source={{ uri }} style={styles.cardImage} />
+                ) : (
+                  <View style={[styles.cardImage, styles.placeholder]}>
+                    <Text>🏠</Text>
+                  </View>
+                )}
+                <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.cardSub}>TZS {Number(item.price).toLocaleString()}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         {/* ================= AGENTS ================= */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Top Agents</Text>
-
           <TouchableOpacity onPress={() => navigation.navigate("Agents")}>
             <Text style={styles.viewAll}>View All</Text>
           </TouchableOpacity>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
           {agents.slice(0, 5).map((agent) => (
-            <TouchableOpacity key={agent.id} style={styles.card}>
+            <TouchableOpacity
+              key={agent.id}
+              style={styles.card}
+              onPress={() => navigation.navigate("AgentPublicProfile", { agent_id: agent.id })}
+            >
               <Image
-                source={{ uri: agent.profile_image }}
+                source={{ uri: agent.profile_image || `https://ui-avatars.com/api/?name=${agent.name}` }}
                 style={styles.cardImage}
               />
               <Text style={styles.cardTitle}>{agent.name}</Text>
@@ -173,130 +188,60 @@ export default function HomeScreen({ navigation }: any) {
             </TouchableOpacity>
           ))}
         </ScrollView>
-
-        <View style={{ height: 30 }} />
       </ScrollView>
+
+      {/* Floating AI Chat Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate("AiChat")}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.fabIcon}>✨</Text>
+        <Text style={styles.fabLabel}>AI</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
 
-/* ---------------- STYLES ---------------- */
-
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-
-  loader: {
-    flex: 1,
+  safe: { flex: 1, backgroundColor: "#fff" },
+  loader: { flex: 1, justifyContent: "center", alignItems: "center" },
+  header: { backgroundColor: "steelblue", padding: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  headerTitle: { color: "#fff", fontSize: 22, fontWeight: "700" },
+  heroImage: { width: "100%", height: 220, resizeMode: "cover" },
+  roleContainer: { padding: 16 },
+  roleTitle: { fontSize: 18, fontWeight: "600", marginBottom: 12 },
+  roleButtons: { flexDirection: "row", gap: 12 },
+  primaryButton: { flex: 1, backgroundColor: "steelblue", paddingVertical: 14, borderRadius: 10, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "600" },
+  sectionHeader: { paddingHorizontal: 16, marginTop: 20, marginBottom: 10, flexDirection: "row", justifyContent: "space-between" },
+  sectionTitle: { fontSize: 18, fontWeight: "700" },
+  viewAll: { color: "steelblue", fontWeight: "600" },
+  card: { width: 180, marginLeft: 16, backgroundColor: "#fff", borderRadius: 12, elevation: 3, marginBottom: 10, borderWidth: 1, borderColor: '#eee' },
+  cardImage: { width: "100%", height: 110, borderTopLeftRadius: 12, borderTopRightRadius: 12 },
+  placeholder: { backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
+  cardTitle: { fontSize: 14, fontWeight: "600", marginTop: 6, paddingHorizontal: 10 },
+  cardSub: { fontSize: 12, color: "#666", paddingHorizontal: 10, marginBottom: 10 },
+  sidebar: { backgroundColor: "#fff", padding: 20, elevation: 10, position: 'absolute', top: 60, right: 0, left: 0, zIndex: 10 },
+  item: { fontSize: 18, marginVertical: 10 },
+  closeBtn: { alignSelf: "flex-end", padding: 5 },
+  close: { fontSize: 22 },
+  fab: {
+    position: "absolute",
+    bottom: Platform.OS === "ios" ? 30 : 24,
+    right: 20,
+    backgroundColor: "#2563EB",
+    borderRadius: 30,
+    width: 62,
+    height: 62,
     justifyContent: "center",
     alignItems: "center",
+    elevation: 6,
+    shadowColor: "#2563EB",
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
-
-  /* HEADER */
-  header: {
-    backgroundColor: "steelblue",
-    padding: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  headerTitle: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: "700",
-  },
-
-  /* HERO */
-  heroImage: {
-    width: "100%",
-    height: 220,
-    resizeMode: "cover",
-  },
-
-  /* ROLE */
-  roleContainer: {
-    padding: 16,
-  },
-  roleTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  roleButtons: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: "steelblue",
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "600",
-  },
-
-  /* SECTION */
-  sectionHeader: {
-    paddingHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  viewAll: {
-    color: "steelblue",
-    fontWeight: "600",
-  },
-
-  /* CARD */
-  card: {
-    width: 180,
-    marginLeft: 16,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    elevation: 3,
-    marginBottom: 10,
-  },
-  cardImage: {
-    width: "100%",
-    height: 110,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginTop: 6,
-    paddingHorizontal: 10,
-  },
-  cardSub: {
-    fontSize: 12,
-    color: "#666",
-    paddingHorizontal: 10,
-    marginBottom: 10,
-  },
-
-  /* SIDEBAR */
-  sidebar: {
-    backgroundColor: "#fff",
-    padding: 20,
-    elevation: 10,
-  },
-  item: {
-    fontSize: 18,
-    marginVertical: 10,
-  },
-  close: {
-    fontSize: 22,
-    alignSelf: "flex-end",
-  },
+  fabIcon: { fontSize: 22 },
+  fabLabel: { color: "#fff", fontSize: 11, fontWeight: "700" },
 });

@@ -4,12 +4,9 @@ import {
   Text,
   StyleSheet,
   Animated,
-  Dimensions,
   StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-
-const { width, height } = Dimensions.get('window');
 
 /**
  * 🎨 THEME CONFIG
@@ -95,7 +92,7 @@ export default function SplashScreen() {
         navigation.replace('Main');
       }, 800);
     });
-  }, []);
+  }, [navigation, logoOpacity, logoScale, taglineOpacity, taglineY, lineWidth, dotScale1, dotScale2, dotScale3, bgShift]);
 
   const animatedLineStyle = {
     width: lineWidth.interpolate({

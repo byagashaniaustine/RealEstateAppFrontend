@@ -1,25 +1,40 @@
 {
   "expo": {
-    "name": "my-new-app",
-    "slug": "my-new-app",
+    "name": "DalaliKiganjani",
+    "slug": "dalalikiganjani",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mynewapp",
+    "scheme": "dalalikiganjani",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dalali.kiganjani",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "DalaliKiganjani needs access to your photo library so you can upload photos of your properties and your agent profile.",
+        "NSPhotoLibraryAddUsageDescription": "DalaliKiganjani saves property images you choose to your photo library.",
+        "NSCameraUsageDescription": "DalaliKiganjani uses the camera so you can take photos of your properties directly from the app.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.dalali.kiganjani",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0A1628",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "output": "static",
@@ -39,9 +54,21 @@
           }
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "DalaliKiganjani needs access to your photo library so you can upload photos of your properties and your agent profile.",
+          "cameraPermission": "DalaliKiganjani uses the camera so you can take photos of your properties directly from the app."
+        }
+      ],
       "expo-font",
       "expo-web-browser"
     ],
+    "extra": {
+      "eas": {
+        "projectId": "TODO: run `eas init` and paste the project ID here"
+      }
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

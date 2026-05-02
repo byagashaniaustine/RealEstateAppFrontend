@@ -6,57 +6,59 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
-  ActivityIndicator,
   StyleSheet,
   Linking,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import axios from "axios";
 
+// Update this to your local machine IP if testing on a real device
 const API_URL = "http://127.0.0.1:8081";
 
 // -----------------------------
-// TYPE
+// TYPES
 // -----------------------------
 type Property = {
   id: number;
   name: string;
   location: string;
   price: number;
-  image?: string;
+  image?: string | string[]; // Support for single or multiple images
   agent_id: number;
   phone?: string;
+  status?: string;
 };
 
+type RootStackParamList = {
+  ViewProperty: { property: Property };
+};
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, "ViewProperty">;
+
 export default function PropertyScreen() {
+  const navigation = useNavigation<NavigationProp>();
   const [properties, setProperties] = useState<Property[]>([]);
   const [filtered, setFiltered] = useState<Property[]>([]);
   const [search, setSearch] = useState("");
   const [location, setLocation] = useState("");
   const [sortPrice, setSortPrice] = useState<"low" | "high" | "">("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // ===============================
-  // FETCH
+  // FETCH DATA
   // ===============================
   const fetchProperties = async () => {
     try {
       setLoading(true);
-
       const res = await axios.get(`${API_URL}/properties`);
-
-      // ✅ FIX: always ensure array
-      const data = Array.isArray(res.data?.data)
-        ? res.data.data
-        : [];
-
+      const data = Array.isArray(res.data?.data) ? res.data.data : [];
       setProperties(data);
       setFiltered(data);
-
     } catch (error) {
-      console.log("Fetch error:", error);
-      setProperties([]);
-      setFiltered([]);
+      console.error("Fetch error:", error);
     } finally {
       setLoading(false);
     }
@@ -67,10 +69,10 @@ export default function PropertyScreen() {
   }, []);
 
   // ===============================
-  // FILTER + SORT (SAFE)
+  // FILTER & SORT LOGIC
   // ===============================
   useEffect(() => {
-    let data = Array.isArray(properties) ? [...properties] : [];
+    let data = [...properties];
 
     if (search) {
       data = data.filter((item) =>
@@ -94,206 +96,163 @@ export default function PropertyScreen() {
   }, [search, location, sortPrice, properties]);
 
   // ===============================
-  // WHATSAPP
+  // ACTIONS
   // ===============================
   const contactOwner = (phone?: string) => {
     if (!phone) {
       alert("No phone number available");
       return;
     }
-
-    const clean = phone.replace(/\D/g, "");
-    Linking.openURL(`https://wa.me/${clean}`);
+    const cleanPhone = phone.replace(/\D/g, "");
+    Linking.openURL(`https://wa.me/${cleanPhone}`);
   };
 
   // ===============================
-  // CARD
+  // RENDER COMPONENTS
   // ===============================
-  const renderItem = ({ item }: { item: Property }) => (
-    <View style={styles.card}>
-      {item.image && (
-        <Image source={{ uri: item.image }} style={styles.image} />
-      )}
+  const renderItem = ({ item }: { item: Property }) => {
+    // Handle multi-image logic: Extract first image if it's an array
+    const displayImage = Array.isArray(item.image) 
+      ? item.image[0] 
+      : item.image;
 
-      <Text style={styles.title}>{item.name}</Text>
-      <Text style={styles.location}>📍 {item.location}</Text>
-
-      <Text style={styles.price}>
-        TZS {Number(item.price).toLocaleString()}
-      </Text>
-
-      <TouchableOpacity
-        style={styles.whatsappBtn}
-        onPress={() => contactOwner(item.phone)}
-      >
-        <Text style={styles.whatsappText}>WhatsApp</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  // ===============================
-  // LOADING
-  // ===============================
-  if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.loading}>
-          <ActivityIndicator size="large" color="#2563EB" />
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => navigation.navigate("ViewProperty", { property: item })}
+      >
+        <View style={styles.imageContainer}>
+          {displayImage ? (
+            <Image source={{ uri: displayImage }} style={styles.image} />
+          ) : (
+            <View style={styles.placeholderImage}>
+              <Text style={styles.placeholderText}>No Image</Text>
+            </View>
+          )}
+          {item.status === "unavailable" && (
+            <View style={styles.soldBadge}>
+              <Text style={styles.soldText}>SOLD</Text>
+            </View>
+          )}
         </View>
-      </SafeAreaView>
-    );
-  }
 
-  // ===============================
-  // UI
-  // ===============================
+        <View style={styles.cardContent}>
+          <Text style={styles.title} numberOfLines={1}>{item.name}</Text>
+          <Text style={styles.locationText} numberOfLines={1}>📍 {item.location}</Text>
+          
+          <Text style={styles.price}>
+            TZS {Number(item.price).toLocaleString()}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.whatsappBtn}
+            onPress={() => contactOwner(item.phone)}
+          >
+            <Text style={styles.whatsappText}>WhatsApp</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
+        <Text style={styles.header}>Explore Properties</Text>
 
-        <Text style={styles.header}>Properties</Text>
+        {/* SEARCH SECTION */}
+        <View style={styles.searchSection}>
+          <TextInput
+            placeholder="Search house, apartment..."
+            value={search}
+            onChangeText={setSearch}
+            style={styles.input}
+          />
+          <TextInput
+            placeholder="Location (e.g. Kinondoni)"
+            value={location}
+            onChangeText={setLocation}
+            style={styles.input}
+          />
+        </View>
 
-        <TextInput
-          placeholder="Search..."
-          value={search}
-          onChangeText={setSearch}
-          style={styles.input}
-        />
-
-        <TextInput
-          placeholder="Location..."
-          value={location}
-          onChangeText={setLocation}
-          style={styles.input}
-        />
-
+        {/* SORT BAR */}
         <View style={styles.sortRow}>
-          <TouchableOpacity onPress={() => setSortPrice("low")}>
-            <Text style={styles.sortBtn}>Low</Text>
+          <TouchableOpacity onPress={() => setSortPrice("low")} style={[styles.sortBtn, sortPrice === 'low' && styles.activeSort]}>
+            <Text style={styles.sortBtnText}>Price: Low</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => setSortPrice("high")}>
-            <Text style={styles.sortBtn}>High</Text>
+          <TouchableOpacity onPress={() => setSortPrice("high")} style={[styles.sortBtn, sortPrice === 'high' && styles.activeSort]}>
+            <Text style={styles.sortBtnText}>Price: High</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => setSortPrice("")}>
-            <Text style={styles.sortBtn}>Clear</Text>
+          <TouchableOpacity onPress={() => {setSortPrice(""); setSearch(""); setLocation("");}}>
+            <Text style={styles.clearBtn}>Reset</Text>
           </TouchableOpacity>
         </View>
 
-        <FlatList
-          key="2-columns" // ✅ FIX crash
-          data={filtered}
-          keyExtractor={(item) => item.id.toString()}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          renderItem={renderItem}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
-        />
+        {loading ? (
+          <ActivityIndicator size="large" color="#2563EB" style={{ marginTop: 50 }} />
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.id.toString()}
+            numColumns={2}
+            columnWrapperStyle={styles.row}
+            renderItem={renderItem}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 40 }}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>No properties found.</Text>
+            }
+          />
+        )}
       </View>
     </SafeAreaView>
   );
 }
 
-// -----------------------------
-// STYLES
-// -----------------------------
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-
-  container: {
-    flex: 1,
-    paddingHorizontal: 15,
-    paddingTop: 10,
-  },
-
-  header: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 15,
-    color: "#2563EB",
-  },
-
+  safe: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, paddingHorizontal: 15 },
+  header: { fontSize: 26, fontWeight: "800", marginVertical: 15, color: "#1E293B" },
+  searchSection: { marginBottom: 10 },
   input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    padding: 10,
-    borderRadius: 10,
-    marginBottom: 10,
+    backgroundColor: "#F1F5F9",
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    fontSize: 14,
   },
-
-  sortRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 15,
-  },
-
-  sortBtn: {
-    backgroundColor: "#2563EB",
-    color: "#fff",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    overflow: "hidden",
-  },
-
-  row: {
-    justifyContent: "space-between",
-  },
-
+  sortRow: { flexDirection: "row", alignItems: "center", marginBottom: 15, gap: 10 },
+  sortBtn: { backgroundColor: "#E2E8F0", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  activeSort: { backgroundColor: "#2563EB" },
+  sortBtnText: { fontSize: 12, fontWeight: "600", color: "#475569" },
+  clearBtn: { color: "#EF4444", fontWeight: "bold", fontSize: 12 },
+  row: { justifyContent: "space-between" },
   card: {
     width: "48%",
-    backgroundColor: "#f9f9f9",
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 15,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
     borderWidth: 1,
-    borderColor: "#eee",
+    borderColor: "#F1F5F9",
+    overflow: "hidden",
   },
-
-  image: {
-    width: "100%",
-    height: 120,
-    borderRadius: 10,
-    marginBottom: 5,
-  },
-
-  title: {
-    fontWeight: "bold",
-    fontSize: 15,
-  },
-
-  location: {
-    fontSize: 13,
-    color: "#666",
-  },
-
-  price: {
-    color: "green",
-    fontWeight: "600",
-    marginVertical: 5,
-  },
-
-  whatsappBtn: {
-    backgroundColor: "#25D366",
-    padding: 8,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 5,
-  },
-
-  whatsappText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-
-  loading: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  imageContainer: { width: "100%", height: 120 },
+  image: { width: "100%", height: "100%" },
+  placeholderImage: { flex: 1, backgroundColor: "#F1F5F9", justifyContent: "center", alignItems: "center" },
+  placeholderText: { color: "#94A3B8", fontSize: 12 },
+  cardContent: { padding: 10 },
+  title: { fontWeight: "bold", fontSize: 14, color: "#1E293B" },
+  locationText: { fontSize: 12, color: "#64748B", marginTop: 2 },
+  price: { color: "#059669", fontWeight: "700", fontSize: 14, marginVertical: 6 },
+  whatsappBtn: { backgroundColor: "#25D366", paddingVertical: 8, borderRadius: 10, alignItems: "center" },
+  whatsappText: { color: "#fff", fontWeight: "bold", fontSize: 12 },
+  soldBadge: { position: "absolute", top: 5, right: 5, backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 8, borderRadius: 4 },
+  soldText: { color: "#fff", fontSize: 10, fontWeight: "bold" },
+  emptyText: { textAlign: "center", marginTop: 50, color: "#94A3B8" },
 });

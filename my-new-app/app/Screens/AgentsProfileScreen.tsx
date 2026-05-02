@@ -28,7 +28,7 @@ interface Agent {
 // -----------------------------
 // COMPONENT
 // -----------------------------
-export default function AgentProfileScreen() {
+export default function AgentProfileScreen({ navigation }: any) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -68,7 +68,11 @@ export default function AgentProfileScreen() {
   // RENDER ITEM
   // ===============================
   const renderItem = ({ item }: { item: Agent }) => (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.85}
+      onPress={() => navigation.navigate("AgentPublicProfile", { agent_id: item.id })}
+    >
       {item.profile_image && (
         <Image source={{ uri: item.profile_image }} style={styles.image} />
       )}
@@ -81,11 +85,11 @@ export default function AgentProfileScreen() {
 
       <TouchableOpacity
         style={styles.whatsappBtn}
-        onPress={() => contactAgent(item.phone)}
+        onPress={(e) => { e.stopPropagation?.(); contactAgent(item.phone); }}
       >
         <Text style={styles.whatsappText}>WhatsApp</Text>
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
   // ===============================

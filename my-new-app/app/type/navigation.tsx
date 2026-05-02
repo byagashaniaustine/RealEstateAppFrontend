@@ -7,6 +7,13 @@ export type RootStackParamList = {
   AgentRegister: undefined; // Agent Registration screen
   AgentDashboard: undefined; // Agent Dashboard screen
   Splash: undefined; // Splash screen
+  ViewProperty: { id: number } | undefined; // View Property screen
+  AiChat: { propertyContext?: { id: number; name: string; price: number; location: string; agent_id: number } } | undefined;
+  AgentAiChat: { agent: { id: number; name: string } };
+  Analytics: { agent: { id: number; name: string } };
+  LeadPipeline: { agent: { id: number; name: string } };
+  Subscription: { agent: { id: number; name: string; email: string } };
+  AgentPublicProfile: { agent_id: number };
 };
 
 export type BottomTabParamList = {
