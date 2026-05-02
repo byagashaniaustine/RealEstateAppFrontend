@@ -16,6 +16,8 @@ PLANS = {
 
 
 async def initiate_payment(agent_id: int, agent_name: str, agent_email: str, plan: str, redirect_url: str) -> dict:
+    if not FLW_SECRET:
+        return {"status": "failed", "message": "Payment service not configured"}
     if plan not in PLANS:
         return {"status": "failed", "message": "Invalid plan. Choose 'monthly' or 'annual'."}
     p = PLANS[plan]
@@ -50,6 +52,8 @@ async def initiate_payment(agent_id: int, agent_name: str, agent_email: str, pla
 
 
 async def verify_transaction(tx_ref: str) -> dict:
+    if not FLW_SECRET:
+        return {"status": "failed", "message": "Payment service not configured"}
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             res = await client.get(

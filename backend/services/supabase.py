@@ -690,7 +690,7 @@ async def create_subscription(agent_id: int, plan: str, tx_ref: str, amount: flo
 
 async def update_property_status(property_id: int, agent_id: int, new_status: str) -> dict:
     try:
-        response = supabase.table("Properties") \
+        response = supabase_admin.table("Properties") \
             .update({"status": new_status}) \
             .eq("id", property_id) \
             .eq("agent_id", agent_id) \

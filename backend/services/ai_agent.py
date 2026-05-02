@@ -14,7 +14,7 @@ from services.supabase import (
     update_property_status,
 )
 
-client = anthropic.Anthropic()
+client = anthropic.AsyncAnthropic()
 
 TOOLS = [
     {
@@ -274,7 +274,7 @@ async def run_agent(
     messages.append({"role": "user", "content": message})
 
     for _ in range(10):
-        response = client.messages.create(
+        response = await client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1024,
             system=system,
@@ -441,7 +441,7 @@ async def run_agent_assistant(message: str, agent_id: int, agent_name: str = Non
     messages.append({"role": "user", "content": message})
 
     for _ in range(10):
-        response = client.messages.create(
+        response = await client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1024,
             system=system,
