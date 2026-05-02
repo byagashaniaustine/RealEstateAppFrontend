@@ -399,7 +399,7 @@ async def book_visit(property_id: int, user_name: str, user_phone: str, visit_da
             .execute()
 
         if existing.data:
-            return {"status": "failed", "message": "Date already booked"}
+            return {"status": "failed", "message": "You already have a booking for this property on that date"}
 
         response = supabase_admin.table("Bookings").insert({
             "property_id": property_id,
