@@ -7,7 +7,7 @@ export type RootStackParamList = {
   AgentRegister: undefined; // Agent Registration screen
   AgentDashboard: undefined; // Agent Dashboard screen
   Splash: undefined; // Splash screen
-  ViewProperty: { id: number } | undefined; // View Property screen
+  ViewProperty: { property: { id: number; name: string; location: string; price: number; status: string; image?: string | string[]; phone?: string; agent_id?: number } };
   AiChat: { propertyContext?: { id: number; name: string; price: number; location: string; agent_id: number } } | undefined;
   AgentAiChat: { agent: { id: number; name: string } };
   Analytics: { agent: { id: number; name: string } };

@@ -83,7 +83,7 @@ export default function AgentPublicProfile({ navigation, route }: any) {
       <TouchableOpacity
         style={styles.propCard}
         activeOpacity={0.85}
-        onPress={() => navigation.navigate("ViewProperty", { id: item.id })}
+        onPress={() => navigation.navigate("ViewProperty", { property: item })}
       >
         {img ? (
           <Image source={{ uri: img }} style={styles.propImage} />

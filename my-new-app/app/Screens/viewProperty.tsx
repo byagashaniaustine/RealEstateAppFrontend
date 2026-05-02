@@ -45,17 +45,14 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 };
 
 export default function ViewProperty({ route, navigation }: any) {
-  const { property } = route.params;
-  const imageSource = property.image || property.images;
-  const imageList   = Array.isArray(imageSource) ? imageSource : [imageSource].filter(Boolean);
+  const property = route?.params?.property;
 
-  // ── STATE ────────────────────────────────────────────────────
-  const [status, setStatus] = useState(property.status || "available");
+  // ── STATE (all hooks must be declared before any conditional return) ──
+  const [status, setStatus] = useState(property?.status || "available");
   const [bookings, setBookings] = useState<any[]>([]);
   const [myBooking, setMyBooking] = useState<any>(null);
   const [loadingBookings, setLoadingBookings] = useState(true);
-  const [refreshing, setRefreshing] = useState(false); // 2. Add refreshing state
-  // Booking modal
+  const [refreshing, setRefreshing] = useState(false);
   const [showBookModal, setShowBookModal] = useState(false);
   const [bookStep, setBookStep] = useState<"details" | "date">("details");
   const [userName, setUserName] = useState("");
@@ -66,12 +63,16 @@ export default function ViewProperty({ route, navigation }: any) {
 
   const takingRef = useRef(false);
 
+  const imageSource = property?.image || property?.images;
+  const imageList   = Array.isArray(imageSource) ? imageSource : [imageSource].filter(Boolean);
+
   // ── FETCH ────────────────────────────────────────────────────
   const fetchBookings = useCallback(async (phone?: string | null) => {
+    if (!property?.id) return;
     try {
       // If we aren't refreshing via pull-down, show the inline loader
       if (!refreshing) setLoadingBookings(true);
-      
+
       const res = await axios.get(`${API_URL}/bookings/${property.id}`);
       const data = res.data.data || [];
       setBookings(data);
@@ -89,7 +90,7 @@ export default function ViewProperty({ route, navigation }: any) {
       setLoadingBookings(false);
       setRefreshing(false); // 3. Reset refreshing state
     }
-  }, [property.id, userPhone, refreshing]);
+  }, [property?.id, userPhone, refreshing]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -208,6 +209,15 @@ export default function ViewProperty({ route, navigation }: any) {
       ]
     );
   };
+
+  // Guard: if no property was passed in params, show spinner
+  if (!property) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F0F4F8" }}>
+        <ActivityIndicator size="large" color="#1565C0" />
+      </View>
+    );
+  }
 
   const statusCfg = STATUS_CONFIG[status] || STATUS_CONFIG.unavailable;
   const formatDate = (d: Date) =>
